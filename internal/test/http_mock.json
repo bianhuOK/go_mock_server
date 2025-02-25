@@ -1,0 +1,28 @@
+{
+    "protocol": "http",
+    "matcher": {
+      "logical": "AND",
+      "conditions": [
+        {
+          "type": "method",
+          "operator": "eq",
+          "value": "POST"
+        },
+        {
+          "type": "path",
+          "operator": "regex",
+          "value": "^/api/v1/users"
+        }
+      ]
+    },
+    "action": {
+      "type": "response",
+      "statusCode": 201,
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": "{\"message\": \"User created successfully\"}"
+    },
+    "isEnabled": true,
+    "priority": 1
+  }

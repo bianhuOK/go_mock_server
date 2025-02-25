@@ -1,0 +1,36 @@
+{
+  "id": "test-rule-1740318443",
+  "name": "Test Rule 1740318443",
+  "protocol": "http",
+  "match": {
+    "logical": "AND",
+    "conditions": [
+      {
+        "type": "method",
+        "operator": "eq",
+        "value": "POST"
+      },
+      {
+        "type": "path",
+        "operator": "regex",
+        "value": "^/api/v1/users"
+      }
+    ]
+  },
+  "action": {
+    "type": "response",
+    "config": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": "{\"message\": \"success\", \"order\": \"{{.order}}\", \"path\": \"{{.Request.URL.Path}}\", \"headers\": {{.Request.Headers}}}",
+      "template": true
+    }
+  },
+  "priority": 1,
+  "status": "active",
+  "version": 0,
+  "createdAt": 1740318443,
+  "updatedAt": 1740318443
+}

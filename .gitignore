@@ -1,0 +1,47 @@
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Go specific
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/vendor/
+
+# Build output
+/bin/
+/dist/
+/build/
+
+# Local development files
+*.env
+*.env.local
+*.local.yaml
+*.local.yml
+.env*
+
+# Log files
+*.log
+/logs/
+
+# Temporary files
+/tmp/
+/temp/
+
+# Test coverage
+coverage.txt
+coverage.html
+
+# Dependencies
+go.work
+
+# Project specific
+config/*.local.yaml
+config/*.local.yml
