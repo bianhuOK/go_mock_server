@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go_mock_server/utils"
 	"regexp"
 	"strings"
+
+	"github.com/PaesslerAG/jsonpath"
 )
 
 // 匹配条件配置（值对象）
@@ -40,12 +43,53 @@ func (mc MatchConfig) Value() (driver.Value, error) {
 	return json.Marshal(mc)
 }
 
-// 3. 添加自定义类型校验（可选）
+// 3. 添加自定义类型校验
 func (mc *MatchConfig) Validate() error {
 	if mc.Logical == "" {
-		return errors.New("path 不能为空")
+		return errors.New("Logical 不能为空")
+	}
+	if mc.Logical != "AND" && mc.Logical != "OR" {
+		return errors.New("Logical 只能是 AND 或 OR")
+	}
+	if len(mc.Conditions) == 0 {
+		return errors.New("Conditions 不能为空")
+	}
+	for i, cond := range mc.Conditions {
+		if cond.Type == "" {
+			return fmt.Errorf("Conditions[%d].Type 不能为空", i)
+		}
+		if cond.Operator == "" {
+			return fmt.Errorf("Conditions[%d].Operator 不能为空", i)
+		}
+		if cond.Value == nil {
+			return fmt.Errorf("Conditions[%d].Value 不能为空", i)
+		}
 	}
 	return nil
+}
+
+func (m *MatchConfig) GetPaths() []string {
+	paths := make([]string, 0)
+	for _, cond := range m.Conditions {
+		if strings.ToLower(cond.Type) == "path" {
+			if pathStr, ok := cond.Value.(string); ok {
+				paths = append(paths, pathStr)
+			}
+		}
+	}
+	return paths
+}
+
+func (m *MatchConfig) GetMethods() []string {
+	methods := make([]string, 0)
+	for _, cond := range m.Conditions {
+		if strings.ToLower(cond.Type) == "method" {
+			if methodStr, ok := cond.Value.(string); ok {
+				methods = append(methods, strings.ToUpper(methodStr))
+			}
+		}
+	}
+	return methods
 }
 
 func (m *MatchConfig) Match(ctx context.Context, reqInfo RequestInfo) bool { //  参数类型改为 RequestInfo
@@ -114,15 +158,16 @@ func (m *MatchConfig) matchPath(reqInfo RequestInfo, cond MatchCondition) bool {
 }
 
 func (m *MatchConfig) matchHeader(reqInfo RequestInfo, cond MatchCondition) bool {
+	log := utils.GetLogger()
 	reqHeaders := reqInfo.GetHeaders()
 	ruleHeaderKey, ok := cond.Key.(string)
 	if !ok {
-		fmt.Printf("Warning: Invalid rule header key type, expect string, got: %T\n", cond.Key)
+		log.Warnf("Warning: Invalid rule header key type, expect string, got: %T\n", cond.Key)
 		return false
 	}
 	ruleHeaderValue, ok := cond.Value.(string)
 	if !ok {
-		fmt.Printf("Warning: Invalid rule header value type, expect string, got: %T\n", cond.Value)
+		log.Warnf("Warning: Invalid rule header value type, expect string, got: %T\n", cond.Value)
 		return false
 	}
 
@@ -165,7 +210,7 @@ func (m *MatchConfig) matchBodyJSON(ctx context.Context, reqInfo RequestInfo, co
 	operator := strings.ToLower(cond.Operator)
 	switch operator {
 	case "json_path": // 使用 jsonpath 库进行 JSONPath 匹配
-		res, err := JsonPathLookup(reqBodyJSON, jsonPath) //  假设 JsonPathLookup 函数已实现 (需要引入 jsonpath 库)
+		res, err := JsonPathLookup(reqBodyJSON, jsonPath)
 		if err != nil {
 			fmt.Printf("Warning: JSONPath lookup error: %v, JSONPath: %s\n", err, jsonPath)
 			return false // JSONPath 查询错误，不匹配
@@ -203,17 +248,18 @@ func (m *MatchConfig) matchBodyJSON(ctx context.Context, reqInfo RequestInfo, co
 	}
 }
 
-// ** 假设的 JsonPathLookup 函数 (需要引入第三方 jsonpath 库并实现) **
-func JsonPathLookup(jsonData map[string]any, jsonPath string) (interface{}, error) {
-	//  **  这里需要使用第三方 jsonpath 库，例如 "github.com/jsonpath-community/jsonpath" **
-	//  **  示例代码仅为演示，需要根据实际使用的 jsonpath 库 API 进行调整 **
-	//  **  以下代码仅为伪代码，需要替换为真实的 jsonpath 查询实现 **
-	/*
-	   res, err := jsonpath.JsonPathLookup(jsonData, jsonPath) //  假设的 jsonpath 查询函数
-	   if err != nil {
-	       return nil, fmt.Errorf("jsonpath lookup failed: %w", err)
-	   }
-	   return res, nil
-	*/
-	return nil, fmt.Errorf("JsonPathLookup not implemented, please install jsonpath library and implement it") //  TODO: Implement JsonPathLookup
+// JsonPathLookup executes a JSONPath query on JSON data
+func JsonPathLookup(jsonData map[string]any, path string) (interface{}, error) {
+	// Ensure path starts with $ root indicator
+	if !strings.HasPrefix(path, "$") {
+		path = "$" + path
+	}
+
+	// Execute JSONPath query
+	result, err := jsonpath.Get(path, jsonData)
+	if err != nil {
+		return nil, fmt.Errorf("jsonpath lookup failed: %w", err)
+	}
+
+	return result, nil
 }

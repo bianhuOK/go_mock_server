@@ -48,8 +48,9 @@ var _ RedisRuleCacheIface = (*redisRuleStorageImpl)(nil)
 
 // GetIndexCache retrieves all rules from the index
 func (r *redisRuleStorageImpl) GetIndexCache(ctx context.Context, indexKey string) ([]string, error) {
+	utils.GetLogger().Debugf("Getting index members for key: %s", indexKey)
 	// Use ZRange to get all members from the sorted set, ordered by priority
-	members, err := r.redisClient.ZRange(ctx, indexKey, 0, -1).Result()
+	members, err := r.redisClient.ZRevRange(ctx, indexKey, 0, -1).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index members: %w", err)
 	}
@@ -94,7 +95,12 @@ func (r *redisRuleStorageImpl) UpdateIndexCache(ctx context.Context, rule *model
 	// }
 
 	// Update method-path index
-	indexKey := model.BuildL1MatchIndexKeyFromRule(rule)
+	var indexKey string
+	if rule.L1MatchIndex == "" {
+		indexKey = model.BuildL1MatchIndexKeyFromRule(rule)
+	} else {
+		indexKey = rule.L1MatchIndex
+	}
 	err = r.SetIndexCache(ctx, indexKey, rule.ID)
 	if err != nil {
 		return err

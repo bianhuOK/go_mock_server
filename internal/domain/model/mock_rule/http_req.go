@@ -46,7 +46,7 @@ func (h *HTTPRequestInfo) GetPath() string {
 func (h *HTTPRequestInfo) GetHeaders() map[string]string {
 	headers := make(map[string]string)
 	for k, v := range h.req.Header {
-		headers[k] = strings.Join(v, ",")
+		headers[strings.ToLower(k)] = strings.Join(v, ",")
 	}
 	return headers
 }

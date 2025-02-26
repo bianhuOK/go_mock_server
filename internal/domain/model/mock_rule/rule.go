@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
-
-	"gorm.io/gorm"
+	"strings"
 )
 
 type MockRuleIface interface {
+	Validate() error
 	IsMatch(ctx context.Context, requestInfo RequestInfo) bool
 	ExecuteAction(ctx context.Context, requestInfo RequestInfo) (ResponseInfo, error)
 }
@@ -46,6 +46,26 @@ type RuleFilter struct {
 	// ... 可以根据需求添加更多 Filter 字段 ...
 }
 
+func (m *MockRule) Validate() error {
+	// Validate match config
+	if err := m.MatchConfig.Validate(); err != nil {
+		return fmt.Errorf("invalid match config: %w", err)
+	}
+
+	// Get method and path from first match condition
+	if ms := m.MatchConfig.GetMethods(); len(ms) > 0 {
+		m.Method = ms[0]
+	}
+	if ps := m.MatchConfig.GetPaths(); len(ps) > 0 {
+		m.OriginalPath = ps[0]
+		m.PathPattern = NormalizePath(m.OriginalPath)
+	}
+
+	m.L1MatchIndex = BuildL1MatchIndexKeyFromRule(m)
+
+	return nil
+}
+
 func (m *MockRule) IsMatch(ctx context.Context, requestInfo RequestInfo) bool {
 	// Check if the rule is enabled
 	if m.Status != RuleStatusActive {
@@ -53,7 +73,7 @@ func (m *MockRule) IsMatch(ctx context.Context, requestInfo RequestInfo) bool {
 	}
 
 	// Validate protocol match
-	if m.Protocol != requestInfo.GetProtocol() {
+	if strings.ToLower(m.Protocol) != strings.ToLower(requestInfo.GetProtocol()) {
 		return false
 	}
 
@@ -84,10 +104,4 @@ func (m *MockRule) ExecuteAction(ctx context.Context, req RequestInfo) (Response
 	// metrics.RecordExecution(m.Protocol, duration, err == nil)
 
 	return resp, err
-}
-
-func (m *MockRule) BeforeSave(tx *gorm.DB) (err error) {
-	m.L1MatchIndex = NormalizePath(m.OriginalPath)
-
-	return nil
 }

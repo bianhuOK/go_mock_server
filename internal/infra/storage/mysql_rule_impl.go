@@ -5,7 +5,6 @@ import (
 	"fmt"
 	model "go_mock_server/internal/domain/model/mock_rule"
 	configs "go_mock_server/internal/infra/config"
-	"strings"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -35,25 +34,15 @@ func NewMysqlRuleStorage(mysqlClient *gorm.DB) MySQLRuleStorageIface {
 var _ MySQLRuleStorageIface = (*MysqlRuleStorage)(nil)
 
 func (s *MysqlRuleStorage) SaveRuleToDB(ctx context.Context, rule *model.MockRule) error {
-	tx := s.mysqlClient.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		return fmt.Errorf("failed to begin transaction: %w", tx.Error)
-	}
-
-	if err := tx.Create(rule).Error; err != nil {
-		tx.Rollback()
-		if strings.Contains(err.Error(), "Error 1062: Duplicate entry") {
-			return fmt.Errorf("rule with name '%s' and protocol '%s' already exists: %w", rule.Name, rule.Protocol, err)
+	return s.mysqlClient.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(rule).Error; err != nil {
+			if err == gorm.ErrDuplicatedKey {
+				return fmt.Errorf("rule with name '%s' and protocol '%s' already exists", rule.Name, rule.Protocol)
+			}
+			return fmt.Errorf("failed to save rule: %w", err)
 		}
-		return fmt.Errorf("failed to save rule to mysql: %w", err)
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (s *MysqlRuleStorage) GetRuleFromDB(ctx context.Context, ruleID string) (*model.MockRule, error) {

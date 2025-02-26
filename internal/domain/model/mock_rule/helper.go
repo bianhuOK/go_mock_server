@@ -6,7 +6,6 @@ import (
 )
 
 // NormalizePath 将路径中的动态部分替换为 *
-// 示例：
 //
 //	/api/user/spx123           => /api/user/*
 //	^/api/user/\d+$            => /api/user/*
@@ -20,9 +19,11 @@ func NormalizePath(path string) string {
 	// 替换 {xxx} 或 :xxx 为 *
 	path = regexp.MustCompile(`\{[^}]+\}|:\w+`).ReplaceAllString(path, "*")
 
-	// 替换连续的非斜杠字符段为 *
-	// 匹配类似 /spx123 或 /\d+ 或 /[a-z]+ 等
-	path = regexp.MustCompile(`/([^/]*(\\\d+|\\[a-zA-Z]+|\[.*\]|\+|\*|\?)[^/]*|)`).ReplaceAllString(path, "/*")
+	// 替换路径中，正则表达式格式 为 *
+	path = regexp.MustCompile(`(/[^/]*[+*?[\]{}\\][^/]*)`).ReplaceAllString(path, "/*")
+
+	// 替换纯数字路径段为 *
+	path = regexp.MustCompile(`(/[\d]+)`).ReplaceAllString(path, "/*")
 
 	// 合并连续的 *
 	path = regexp.MustCompile(`/\*(\*)+`).ReplaceAllString(path, "/*")
@@ -43,5 +44,6 @@ func BuildL1MatchIndexKey(schema string, method string, path string) string {
 		method = "*"
 	}
 	normalizedPath := NormalizePath(path)
-	return strings.Join([]string{schema, method, normalizedPath}, "_")
+	methodLower := strings.ToLower(method)
+	return strings.Join([]string{schema, methodLower, normalizedPath}, "_")
 }

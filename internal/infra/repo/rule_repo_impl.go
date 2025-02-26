@@ -96,6 +96,7 @@ func (r *ruleRepoImpl) FindByID(ctx context.Context, id string) (*model.MockRule
 	// 先从缓存查询
 	rule, err := r.redisCache.GetRuleFromCache(ctx, id)
 	if err == nil {
+		utils.GetLogger().Debugf("rule found in cache: %s", id)
 		return rule, nil
 	}
 
@@ -134,6 +135,7 @@ func (r *ruleRepoImpl) GetIndexRule(ctx context.Context, indexKey string) ([]*mo
 	ruleIDs, err := r.redisCache.GetIndexCache(ctx, indexKey)
 	if err != nil || len(ruleIDs) == 0 {
 		// Redis 未命中，从数据库中查找 path like 的规则集合
+		utils.GetLogger().Debugf("index cache miss for key: %s, now get data from db", indexKey)
 		rules, err := r.mysqlStorage.ListRules(ctx, &model.RuleFilter{L1MatchIndex: &indexKey})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get rules from db: %w", err)
@@ -223,12 +225,14 @@ func (r *ruleRepoImpl) FindBestMatchRule(ctx context.Context, req model.RequestI
 
 	// 使用 singleflight 防止并发查询
 	data, err, _ := r.sfGroup.Do(fmt.Sprintf("find_rule_%s", matchIndex), func() (interface{}, error) {
+		utils.GetLogger().Debugf("finding best match rule for index: %s", matchIndex)
 		var rules []*model.MockRule
 		var err error
 
 		// 2. 优先从 Redis sorted set 获取可能匹配的规则ID集合
 		rules, err = r.GetIndexRule(ctx, matchIndex)
 		if err != nil {
+			utils.GetLogger().Warnf("failed to get index rule: %v", err)
 			return nil, fmt.Errorf("failed to get index rule: %w", err)
 		}
 
@@ -309,7 +313,7 @@ func (r *ruleRepoImpl) GetRule(ctx context.Context, ruleID string) (*model.MockR
 	}
 
 	// 使用 singleflight 防止缓存击穿
-	data, err, _ := r.sfGroup.Do(fmt.Sprintf("get_rule_%d", ruleID), func() (interface{}, error) {
+	data, err, _ := r.sfGroup.Do(fmt.Sprintf("get_rule_%s", ruleID), func() (interface{}, error) {
 		// 查询数据库
 		rule, err := r.mysqlStorage.GetRuleFromDB(ctx, ruleID)
 		if err != nil {
@@ -400,8 +404,7 @@ func (r *ruleRepoImpl) handleIndexUpdate(req *indexUpdateRequest) {
 		retry.Delay(r.config.IndexUpdateRetryDelay),
 	)
 	if err != nil {
-		// 这里可以添加日志记录
-		fmt.Printf("failed to update index: %v\n", err)
+		utils.GetLogger().Errorf("failed to update index: %v\n", err)
 	}
 }
 
